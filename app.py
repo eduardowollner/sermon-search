@@ -1,26 +1,35 @@
 import streamlit as st
+import google.generativeai as genai
 from supabase import create_client
 
-# ── Configuração da página ────────────────────────────────────
+# ── Configuração ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Busca de Sermões",
     page_icon="✝️",
     layout="centered",
 )
 
-# ── Conexão com Supabase (lê dos secrets do Streamlit Cloud) ─
 @st.cache_resource
 def conectar():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    return supabase
 
 supabase = conectar()
 
-# ── Função de busca ───────────────────────────────────────────
-def buscar(termo, limite=20):
-    resp = supabase.rpc("buscar_segmentos", {
-        "termo": termo,
+# ── Funções ───────────────────────────────────────────────────
+def gerar_embedding_busca(texto):
+    resultado = genai.embed_content(
+        model="models/text-embedding-004",
+        content=texto,
+        task_type="retrieval_query",
+    )
+    return resultado["embedding"]
+
+def buscar(pergunta, limite=10):
+    embedding = gerar_embedding_busca(pergunta)
+    resp = supabase.rpc("buscar_semantico", {
+        "query_embedding": embedding,
         "lim": limite,
     }).execute()
     return resp.data or []
@@ -32,16 +41,13 @@ def formatar_tempo(segundos):
     s = segundos % 60
     return f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
 
-def link_youtube(url, inicio_seg):
-    return f"{url}&t={int(inicio_seg)}"
-
 # ── Interface ─────────────────────────────────────────────────
 st.title("✝️ Busca de Sermões")
-st.caption("Pesquise por temas, palavras ou trechos em todos os vídeos transcritos.")
+st.caption("Pesquise por temas ou perguntas — não precisa usar as palavras exatas.")
 
-termo = st.text_input(
+pergunta = st.text_input(
     "O que você quer encontrar?",
-    placeholder="ex: graça, fé e perseverança, perdão...",
+    placeholder="ex: como ter paz em momentos difíceis...",
 )
 
 col1, col2 = st.columns([2, 1])
@@ -51,36 +57,43 @@ with col2:
     limite = st.selectbox("Resultados", [10, 20, 50], index=0, label_visibility="collapsed")
 
 # ── Resultados ────────────────────────────────────────────────
-if buscar_btn and termo.strip():
-    with st.spinner("Buscando..."):
-        resultados = buscar(termo.strip(), limite)
+if buscar_btn and pergunta.strip():
+    with st.spinner("Buscando por significado..."):
+        resultados = buscar(pergunta.strip(), limite)
 
     if not resultados:
-        st.warning("Nenhum resultado encontrado. Tente outro termo.")
+        st.warning("Nenhum resultado encontrado. Tente reformular a pergunta.")
     else:
-        st.success(f"{len(resultados)} trecho(s) encontrado(s) para **{termo}**")
+        st.success(f"{len(resultados)} trecho(s) encontrado(s)")
         st.divider()
 
         for r in resultados:
             tempo = formatar_tempo(r["inicio_seg"])
-            url_t = link_youtube(r["url"], r["inicio_seg"])
+            url_t = f"{r['url']}&t={int(r['inicio_seg'])}"
+            similaridade = round(r["similaridade"] * 100, 1)
 
             with st.container():
-                st.markdown(f"#### 📺 {r['titulo']}")
+                col_titulo, col_sim = st.columns([4, 1])
+                with col_titulo:
+                    st.markdown(f"#### 📺 {r['titulo']}")
+                with col_sim:
+                    st.metric("relevância", f"{similaridade}%")
+
                 col_a, col_b = st.columns([1, 3])
                 with col_a:
                     st.markdown(f"⏱️ `{tempo}`")
                 with col_b:
                     st.link_button("Abrir no YouTube ↗", url_t)
+
                 st.markdown(f"> {r['texto']}")
                 st.divider()
 
-elif buscar_btn and not termo.strip():
-    st.error("Digite um termo para buscar.")
+elif buscar_btn and not pergunta.strip():
+    st.error("Digite uma pergunta para buscar.")
 
-# ── Rodapé ───────────────────────────────────────────────────
+# ── Rodapé ────────────────────────────────────────────────────
 st.markdown(
-    "<div style='text-align:center; color:gray; font-size:12px; margin-top:40px'>"
-    "Busca em transcrições geradas com Whisper · Banco Supabase</div>",
+    "<div style='text-align:center;color:gray;font-size:12px;margin-top:40px'>"
+    "Busca semântica com Google text-embedding-004 · Supabase pgvector</div>",
     unsafe_allow_html=True,
 )
