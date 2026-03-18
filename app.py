@@ -94,12 +94,12 @@ if buscar_btn and pergunta.strip():
                 with col_b:
                     st.link_button("Abrir no YouTube ↗", url_t)
 
-            texto_destacado = destacar_termos(r['texto'], pergunta)
-            st.markdown(
-                f"<div style='border-left: 3px solid #ccc; padding-left: 12px; "
-                f"color: var(--text-color); margin: 8px 0'>{texto_destacado}</div>",
-                unsafe_allow_html=True
-            )
+                texto_destacado = destacar_termos(r["texto"], pergunta)
+                st.markdown(
+                    f"<div style='border-left: 3px solid #ccc; padding-left: 12px; "
+                    f"margin: 8px 0'>{texto_destacado}</div>",
+                    unsafe_allow_html=True,
+                )
                 st.divider()
 
 elif buscar_btn and not pergunta.strip():
@@ -108,6 +108,6 @@ elif buscar_btn and not pergunta.strip():
 # ── Rodapé ────────────────────────────────────────────────────
 st.markdown(
     "<div style='text-align:center;color:gray;font-size:12px;margin-top:40px'>"
-    "Busca semântica com Google text-embedding-004 · Supabase pgvector</div>",
+    "Busca semântica com Google gemini-embedding-001 · Supabase pgvector</div>",
     unsafe_allow_html=True,
 )
