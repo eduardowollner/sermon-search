@@ -42,6 +42,14 @@ def formatar_tempo(segundos):
     s = segundos % 60
     return f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
 
+def destacar_termos(texto, pergunta):
+    import re
+    palavras = [p for p in pergunta.lower().split() if len(p) > 3]
+    for palavra in palavras:
+        padrao = re.compile(f"({re.escape(palavra)})", re.IGNORECASE)
+        texto = padrao.sub(r"**\1**", texto)
+    return texto
+
 # ── Interface ─────────────────────────────────────────────────
 st.title("✝️ Busca de Sermões")
 st.caption("Pesquise por temas ou perguntas — não precisa usar as palavras exatas.")
