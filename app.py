@@ -94,7 +94,8 @@ if buscar_btn and pergunta.strip():
                 with col_b:
                     st.link_button("Abrir no YouTube ↗", url_t)
 
-                st.markdown(f"> {r['texto']}")
+                texto_destacado = destacar_termos(r['texto'], pergunta)
+                st.markdown(f"> {texto_destacado}")
                 st.divider()
 
 elif buscar_btn and not pergunta.strip():
