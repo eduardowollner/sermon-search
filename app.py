@@ -29,7 +29,7 @@ def gerar_embedding_busca(texto):
 
 def buscar(pergunta, limite=10):
     embedding = gerar_embedding_busca(pergunta)
-    resp = supabase.rpc("buscar_semantico", {
+    resp = supabase.rpc("buscar_chunks", {
         "query_embedding": embedding,
         "lim": limite,
     }).execute()
