@@ -20,9 +20,10 @@ supabase = conectar()
 # ── Funções ───────────────────────────────────────────────────
 def gerar_embedding_busca(texto):
     resultado = genai.embed_content(
-        model="models/text-embedding-004",
+        model="models/gemini-embedding-001",
         content=texto,
         task_type="retrieval_query",
+        output_dimensionality=1536,
     )
     return resultado["embedding"]
 
