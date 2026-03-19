@@ -42,15 +42,33 @@ def formatar_tempo(segundos):
     s = segundos % 60
     return f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
 
-def destacar_termos(texto, pergunta):
+def resumir_relevancia(texto, pergunta):
+    # Encontra a frase do chunk mais próxima do tema buscado
     import re
-    palavras = [p for p in pergunta.lower().split() if len(p) > 3]
-    for palavra in palavras:
-        padrao = re.compile(f"({re.escape(palavra)})", re.IGNORECASE)
-        texto = padrao.sub(
-            r"<mark style='background-color:#fff3b0;color:#000;border-radius:3px;padding:0 2px'>\1</mark>",
-            texto
-        )
+    frases = re.split(r'(?<=[.!?])\s+', texto)
+    pergunta_lower = pergunta.lower()
+    palavras_busca = set(pergunta_lower.split())
+
+    melhor_frase = ""
+    melhor_score = -1
+
+    for frase in frases:
+        score = sum(1 for p in palavras_busca if p in frase.lower())
+        if score > melhor_score:
+            melhor_score = score
+            melhor_frase = frase
+
+    # Destaca palavras da busca que aparecem no texto
+    for palavra in palavras_busca:
+        if len(palavra) > 3:
+            padrao = re.compile(f"({re.escape(palavra)})", re.IGNORECASE)
+            texto = padrao.sub(
+                r"<mark style='background-color:#fff3b0;color:#000;"
+                r"border-radius:3px;padding:0 2px'>\1</mark>",
+                texto
+            )
+
+    return texto, melhor_frase
     return texto
 
 # ── Interface ─────────────────────────────────────────────────
@@ -97,11 +115,20 @@ if buscar_btn and pergunta.strip():
                 with col_b:
                     st.link_button("Abrir no YouTube ↗", url_t)
 
-                texto_destacado = destacar_termos(r["texto"], pergunta)
-                texto_destacado = destacar_termos(r["texto"], pergunta)
+                texto_destacado, frase_relevante = resumir_relevancia(r["texto"], pergunta)
+
+                if frase_relevante:
+                    st.markdown(
+                        f"<div style='background:#1a3a1a;border-left:3px solid #4caf50;"
+                        f"padding:6px 12px;margin:8px 0;font-size:13px;color:#90ee90;"
+                        f"border-radius:0 6px 6px 0'>"
+                        f"Trecho mais relevante: <em>{frase_relevante}</em></div>",
+                        unsafe_allow_html=True,
+                    )
+                
                 st.write(
-                    f"<div style='border-left:3px solid #ccc;padding:8px 12px;margin:8px 0;font-size:15px'>"
-                    f"{texto_destacado}</div>",
+                    f"<div style='border-left:3px solid #ccc;padding:8px 12px;"
+                    f"margin:8px 0;font-size:15px'>{texto_destacado}</div>",
                     unsafe_allow_html=True,
                 )
                 st.divider()
