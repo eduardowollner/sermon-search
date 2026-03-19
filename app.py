@@ -47,7 +47,10 @@ def destacar_termos(texto, pergunta):
     palavras = [p for p in pergunta.lower().split() if len(p) > 3]
     for palavra in palavras:
         padrao = re.compile(f"({re.escape(palavra)})", re.IGNORECASE)
-        texto = padrao.sub(r"<strong>\1</strong>", texto)
+        texto = padrao.sub(
+            r"<mark style='background-color:#fff3b0;color:#000;border-radius:3px;padding:0 2px'>\1</mark>",
+            texto
+        )
     return texto
 
 # ── Interface ─────────────────────────────────────────────────
@@ -95,9 +98,10 @@ if buscar_btn and pergunta.strip():
                     st.link_button("Abrir no YouTube ↗", url_t)
 
                 texto_destacado = destacar_termos(r["texto"], pergunta)
-                st.markdown(
-                    f"<div style='border-left: 3px solid #ccc; padding-left: 12px; "
-                    f"margin: 8px 0'>{texto_destacado}</div>",
+                texto_destacado = destacar_termos(r["texto"], pergunta)
+                st.write(
+                    f"<div style='border-left:3px solid #ccc;padding:8px 12px;margin:8px 0;font-size:15px'>"
+                    f"{texto_destacado}</div>",
                     unsafe_allow_html=True,
                 )
                 st.divider()
