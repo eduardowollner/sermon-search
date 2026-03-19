@@ -4,7 +4,7 @@ from supabase import create_client
 
 # ── Configuração ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="Busca de Sermões",
+    page_title="Assistente de Sermões",
     page_icon="✝️",
     layout="centered",
 )
@@ -27,7 +27,7 @@ def gerar_embedding_busca(texto):
     )
     return resultado["embedding"]
 
-def buscar(pergunta, limite=10):
+def buscar_chunks(pergunta, limite=8):
     embedding = gerar_embedding_busca(pergunta)
     resp = supabase.rpc("buscar_chunks", {
         "query_embedding": embedding,
@@ -42,103 +42,90 @@ def formatar_tempo(segundos):
     s = segundos % 60
     return f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
 
-def resumir_relevancia(texto, pergunta):
-    # Encontra a frase do chunk mais próxima do tema buscado
-    import re
-    frases = re.split(r'(?<=[.!?])\s+', texto)
-    pergunta_lower = pergunta.lower()
-    palavras_busca = set(pergunta_lower.split())
+def gerar_resposta(pergunta, chunks):
+    contexto = ""
+    for i, c in enumerate(chunks):
+        tempo = formatar_tempo(c["inicio_seg"])
+        contexto += (
+            f"\n---\n"
+            f"[Fonte {i+1}] Vídeo: \"{c['titulo']}\" | Tempo: {tempo}\n"
+            f"{c['texto']}\n"
+        )
 
-    melhor_frase = ""
-    melhor_score = -1
+    prompt = f"""Você é um assistente cristão que ajuda pessoas a encontrar ensinamentos em sermões.
 
-    for frase in frases:
-        score = sum(1 for p in palavras_busca if p in frase.lower())
-        if score > melhor_score:
-            melhor_score = score
-            melhor_frase = frase
+Com base APENAS nos trechos de sermões abaixo, responda a pergunta do usuário de forma clara e edificante.
 
-    # Destaca palavras da busca que aparecem no texto
-    for palavra in palavras_busca:
-        if len(palavra) > 3:
-            padrao = re.compile(f"({re.escape(palavra)})", re.IGNORECASE)
-            texto = padrao.sub(
-                r"<mark style='background-color:#fff3b0;color:#000;"
-                r"border-radius:3px;padding:0 2px'>\1</mark>",
-                texto
-            )
+Regras importantes:
+- Use apenas o conteúdo dos trechos fornecidos, não invente nada
+- Ao citar um ensinamento, indique entre parênteses a fonte, por exemplo: (Fonte 1)
+- Se os trechos não forem suficientes para responder, diga isso claramente
+- Responda em português, de forma acolhedora e com linguagem cristã
+- Ao final, liste os vídeos que foram usados na resposta
 
-    return texto, melhor_frase
-    return texto
+Trechos dos sermões:
+{contexto}
+
+Pergunta: {pergunta}
+
+Resposta:"""
+
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    resposta = model.generate_content(prompt)
+    return resposta.text
 
 # ── Interface ─────────────────────────────────────────────────
-st.title("✝️ Busca de Sermões")
-st.caption("Pesquise por temas ou perguntas — não precisa usar as palavras exatas.")
+st.title("✝️ Assistente de Sermões")
+st.caption("Faça uma pergunta e receba uma resposta baseada nos sermões transcritos.")
 
 pergunta = st.text_input(
-    "O que você quer encontrar?",
-    placeholder="ex: como ter paz em momentos difíceis...",
+    "Qual é a sua pergunta?",
+    placeholder="ex: O que os pregadores ensinam sobre perdoar quem nos machucou?",
 )
 
 col1, col2 = st.columns([2, 1])
 with col1:
-    buscar_btn = st.button("Buscar", type="primary", use_container_width=True)
+    buscar_btn = st.button("Perguntar", type="primary", use_container_width=True)
 with col2:
-    limite = st.selectbox("Resultados", [10, 20, 50], index=0, label_visibility="collapsed")
+    n_chunks = st.selectbox(
+        "Trechos analisados", [5, 8, 12], index=1, label_visibility="collapsed"
+    )
 
-# ── Resultados ────────────────────────────────────────────────
+# ── Resultado ─────────────────────────────────────────────────
 if buscar_btn and pergunta.strip():
-    with st.spinner("Buscando por significado..."):
-        resultados = buscar(pergunta.strip(), limite)
+    with st.spinner("Buscando nos sermões e gerando resposta..."):
+        chunks = buscar_chunks(pergunta.strip(), n_chunks)
 
-    if not resultados:
-        st.warning("Nenhum resultado encontrado. Tente reformular a pergunta.")
-    else:
-        st.success(f"{len(resultados)} trecho(s) encontrado(s)")
-        st.divider()
+        if not chunks:
+            st.warning("Nenhum trecho relevante encontrado. Tente reformular a pergunta.")
+        else:
+            resposta = gerar_resposta(pergunta.strip(), chunks)
 
-        for r in resultados:
-            tempo = formatar_tempo(r["inicio_seg"])
-            url_t = f"{r['url']}&t={int(r['inicio_seg'])}"
-            similaridade = round(r["similaridade"] * 100, 1)
+            # Resposta do LLM
+            st.markdown("### Resposta")
+            st.markdown(resposta)
 
-            with st.container():
-                col_titulo, col_sim = st.columns([4, 1])
-                with col_titulo:
-                    st.markdown(f"#### 📺 {r['titulo']}")
-                with col_sim:
-                    st.metric("relevância", f"{similaridade}%")
+            # Fontes
+            st.divider()
+            st.markdown("### Trechos consultados")
+            for i, c in enumerate(chunks):
+                tempo = formatar_tempo(c["inicio_seg"])
+                url_t = f"{c['url']}&t={int(c['inicio_seg'])}"
+                similaridade = round(c["similaridade"] * 100, 1)
 
-                col_a, col_b = st.columns([1, 3])
-                with col_a:
-                    st.markdown(f"⏱️ `{tempo}`")
-                with col_b:
+                with st.expander(
+                    f"Fonte {i+1} — {c['titulo']} · {tempo} · {similaridade}% relevância"
+                ):
+                    st.markdown(f"> {c['texto']}")
                     st.link_button("Abrir no YouTube ↗", url_t)
 
-                texto_destacado, frase_relevante = resumir_relevancia(r["texto"], pergunta)
-
-                if frase_relevante:
-                    st.markdown(
-                        f"<div style='background:#1a3a1a;border-left:3px solid #4caf50;"
-                        f"padding:6px 12px;margin:8px 0;font-size:13px;color:#90ee90;"
-                        f"border-radius:0 6px 6px 0'>"
-                        f"Trecho mais relevante: <em>{frase_relevante}</em></div>",
-                        unsafe_allow_html=True,
-                    )
-                
-                st.write(
-                    f"<div style='border-left:3px solid #ccc;padding:8px 12px;"
-                    f"margin:8px 0;font-size:15px'>{texto_destacado}</div>",
-                    unsafe_allow_html=True,
-                )
-                st.divider()
-
 elif buscar_btn and not pergunta.strip():
-    st.error("Digite uma pergunta para buscar.")
+    st.error("Digite uma pergunta.")
 
 # ── Rodapé ────────────────────────────────────────────────────
 st.markdown(
     "<div style='text-align:center;color:gray;font-size:12px;margin-top:40px'>"
-    "Busca semântica com Google gemini-embedding-001 · Supabase pgvector</div>",
+    "Respostas geradas com Gemini 1.5 Flash · Busca semântica com pgvector · Supabase"
+    "</div>",
     unsafe_allow_html=True,
 )
