@@ -88,7 +88,7 @@ with col1:
     buscar_btn = st.button("Perguntar", type="primary", use_container_width=True)
 with col2:
     n_chunks = st.selectbox(
-        "Trechos analisados", [5, 8, 12], index=1, label_visibility="collapsed"
+        "Trechos analisados", [3, 5, 8], index=1, label_visibility="collapsed"
     )
 
 # ── Resultado ─────────────────────────────────────────────────
